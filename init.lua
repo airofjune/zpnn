@@ -80,6 +80,7 @@ require('nn.CosineDistance')
 require('nn.DotProduct')
 require('nn.Normalize')
 require('nn.Cosine')
+require('nn.Kmeans')
 
 require('nn.Exp')
 require('nn.Log')
@@ -202,6 +203,7 @@ require('nn.BCECriterion')
 require('nn.CrossEntropyCriterion')
 require('nn.ParallelCriterion')
 require('nn.DistanceRatioCriterion')
+require('nn.ModuleCriterion')
 
 require('nn.PixelShuffle')
 
