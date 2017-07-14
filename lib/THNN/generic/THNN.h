@@ -2,6 +2,38 @@
 #define TH_GENERIC_FILE "generic/THNN.h"
 #else
 
+//for LSTM
+TH_API void THNN_(LSTM_updateOutput)(
+          THNNState *state,
+          THLongTensor *primitives,
+          int initOK,
+          THTensor *input_c,
+          THTensor *input_h,
+          THTensor *input_x,
+          THTensor *output_c,
+          THTensor *output_h,
+          THTensor *weight_h,
+          THTensor *weight_x,
+          THTensor *bias_h,
+          THTensor *bias_x);
+TH_API void THNN_(LSTM_updateGradInput)(
+      THNNState *state,
+      THLongTensor *primitives,
+      THTensor *input_c,
+      THTensor *input_h,
+      THTensor *input_x,
+      THTensor *weight_h,
+      THTensor *weight_x,
+      THTensor *grad_output_c,
+      THTensor *grad_output_h,
+      THTensor *grad_weight_h,
+      THTensor *grad_weight_x,
+      THTensor *grad_bias_h,
+      THTensor *grad_bias_x,
+      THTensor *grad_input_c,
+      THTensor *grad_input_h,
+      THTensor *grad_input_x);
+
 TH_API void THNN_(Abs_updateOutput)(
           THNNState *state,            // library's state
           THTensor *input,             // input tensor

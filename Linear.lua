@@ -85,7 +85,6 @@ function Linear:updateGradInput(input, gradOutput)
       elseif input:dim() == 2 then
          self.gradInput:addmm(0, 1, gradOutput, self.weight)
       end
-
       return self.gradInput
    end
 end

@@ -110,6 +110,10 @@
 #include "generic/LookupTable.c"
 #include "THGenerateFloatTypes.h"
 
+//for LSTM
+#include "generic/LSTM.c"
+#include "THGenerateFloatTypes.h"
+
 #include "generic/MSECriterion.c"
 #include "THGenerateFloatTypes.h"
 
@@ -277,4 +281,3 @@
 
 #include "generic/VolumetricUpSamplingTrilinear.c"
 #include "THGenerateFloatTypes.h"
-

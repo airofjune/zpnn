@@ -6,7 +6,6 @@ require('nn.THNN')
 
 require('nn.utils')
 
-
 require('nn.ErrorMessages')
 require('nn.Module')
 
@@ -15,6 +14,9 @@ require('nn.Concat')
 require('nn.Parallel')
 require('nn.Sequential')
 require('nn.DepthConcat')
+
+--add for LSTM
+require('nn.LSTM')
 
 require('nn.Decorator')
 require('nn.Bottle')
