@@ -75,19 +75,19 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
 
     //grad_input_h (bs*hs) = grad_gate(bs*hs4) * T(weight_h) (hs4*hs)
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, bs, hs, hs4, 1, grad_gate, hs4,
-                     weight_h, hs4, 0, grad_input_h, hs);
+                     weight_h, hs4, 1, grad_input_h, hs);
 
     //grad_input_x (bs*xl) = grad_gate(bs*hs4) * T(weight_x) (hs4*xl)
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, bs, xl, hs4, 1, grad_gate, hs4,
-                     weight_x, hs4, 0, grad_input_x, xl);
+                     weight_x, hs4, 1, grad_input_x, xl);
 
     //grad_weight_h (hs*hs4) = T(input_h) * grad_gate(bs*hs4)
     cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, hs, hs4, bs, 1, input_h, hs,
-                     grad_gate, hs4, 0, grad_weight_h, hs4);
+                     grad_gate, hs4, 1, grad_weight_h, hs4);
 
     //grad_weight_x (xl*hs4) = T(input_x) * grad_gate(bs*hs4)
     cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, xl, hs4, bs, 1, input_x, xl,
-                     grad_gate, hs4, 0, grad_weight_x, hs4);
+                     grad_gate, hs4, 1, grad_weight_x, hs4);
 
     //bias
     #pragma omp parallel for
@@ -291,7 +291,6 @@ static void THNN_(Fprop)(
     {
         THNN_(InternalMemAlloc)(prim, bs, hs);
     }
-
 
     THNN_(Linear_fprop)(bs, hs, xl, prim[TEMP_BIAS], bias_h, bias_x, prim[TEMP_GATE],
                 weight_h, weight_x, input_h, input_x);
