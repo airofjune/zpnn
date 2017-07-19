@@ -5,7 +5,7 @@
 //for LSTM
 TH_API void THNN_(LSTM_updateOutput)(
           THNNState *state,
-          THLongTensor *primitives,
+          THFloatTensor *primitives,
           int initOK,
           THTensor *input_c,
           THTensor *input_h,
@@ -18,7 +18,7 @@ TH_API void THNN_(LSTM_updateOutput)(
           THTensor *bias_x);
 TH_API void THNN_(LSTM_updateGradInput)(
       THNNState *state,
-      THLongTensor *primitives,
+      THFloatTensor *primitives,
       THTensor *input_c,
       THTensor *input_h,
       THTensor *input_x,

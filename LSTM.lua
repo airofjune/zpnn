@@ -11,7 +11,7 @@ C_(t) = sig{Whc*H(t-1) + Wxc*X(t)}
 C(t) = F(t) .* C(t-1) + I(t) .* C_(t)
 H(t) = O(t) .* tan{C(t)}
 --]]
-
+_G.ins = 0
 function LSTM:__init(inputSize, hiddenSize, bias)
    parent.__init(self)
    outputSize = 4 * hiddenSize
@@ -33,6 +33,12 @@ function LSTM:__init(inputSize, hiddenSize, bias)
       self.bias_x      = torch.Tensor(outputSize)
       self.grad_bias_x = torch.Tensor(outputSize)
    end
+   self.dnnPrimitives = torch.Tensor(30)
+   self.ins = _G.ins
+   _G.ins = _G.ins + 1
+   print(self.ins .. 'add is')
+   print(self.dnnPrimitives:cdata())
+   self.mkldnnInitOk = 0
    self:reset()
 end
 
@@ -76,15 +82,12 @@ function LSTM:updateOutput(input)
    self.output_c:resize(batch_size, self.weight_h:size(1))
    self.output_h:resize(batch_size, self.weight_h:size(1))
 
-   if self.dnnPrimitives then
-      self.mkldnnInitOk = 1
-   else
-      self.mkldnnInitOk = 0
-   end
-   self.dnnPrimitives = self.dnnPrimitives or torch.LongTensor(30)
-
    --TODO bias = NULL
    --input is c, h, x
+   print('before forward')
+   print(self.ins .. 'addr is')
+   print(self.dnnPrimitives:storage():data())
+   print(self.dnnPrimitives[1])
    input[1].THNN.LSTM_updateOutput(
       self.dnnPrimitives:cdata(),
       self.mkldnnInitOk,
@@ -98,7 +101,10 @@ function LSTM:updateOutput(input)
       self.bias_h:cdata(),
       self.bias_x:cdata()
    )
-
+   print('after forward')
+   self.mkldnnInitOk = 1
+   print(self.dnnPrimitives[1])
+   io.read()
    return self.output
 end
 
@@ -110,6 +116,8 @@ function LSTM:updateGradInput(input, gradOutput)
    --TODO bias = NULL
    --input is c, h, x
    --grad output should be c, h
+   print('before back')
+   print(self.dnnPrimitives:cdata())
    input[1].THNN.LSTM_updateGradInput(
       self.dnnPrimitives:cdata(),
       input[1]:cdata(),
@@ -127,6 +135,7 @@ function LSTM:updateGradInput(input, gradOutput)
       self.grad_in_h:cdata(),
       self.grad_in_x:cdata()
    )
+   print('after back')
    return self.gradInput
 end
 

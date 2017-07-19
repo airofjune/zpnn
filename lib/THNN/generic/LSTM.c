@@ -259,7 +259,11 @@ static void THNN_(TanhDot_bprop)(float* grad_out_c0, float* grad_out_h, float* t
 static int THNN_(InternalMemAlloc)(float** prim, const long bs, const long hs)
 {
     const long hs4 = hs * 4;
+    printf("bs, hs4 %d, %d\n", bs, hs4);
     prim[TEMP_GATE]    = (float*)malloc(sizeof(float)*bs*hs4);
+    printf("in c addr: %x\n", prim);
+    printf("val %x\n", prim[0]);
+    printf("val %x\n", prim[TEMP_GATE] );
     prim[GATE_I]       = (float*)malloc(sizeof(float)*bs*hs);
     prim[GATE_F]       = (float*)malloc(sizeof(float)*bs*hs);
     prim[GATE_C]       = (float*)malloc(sizeof(float)*bs*hs);
@@ -292,7 +296,7 @@ static void THNN_(Fprop)(
         THNN_(InternalMemAlloc)(prim, bs, hs);
     }
 
-    THNN_(Linear_fprop)(bs, hs, xl, prim[TEMP_BIAS], bias_h, bias_x, prim[TEMP_GATE],
+    THNN_(Linear_fprop)(64, hs, xl, prim[TEMP_BIAS], bias_h, bias_x, prim[TEMP_GATE],
                 weight_h, weight_x, input_h, input_x);
 
     //sigmoid and split
@@ -308,6 +312,7 @@ static void THNN_(Fprop)(
                     prim[GATE_I], prim[GATE_C], input_c);
 
     THNN_(TanhDot_fprop)(output_h, prim[C_TANH], output_c, prim[GATE_O], bs*hs);
+
 }
 
 static void THNN_(Bprop)(
@@ -334,12 +339,13 @@ static void THNN_(Bprop)(
     THNN_(Linear_bprop)(input_h, input_x, prim[TEMP_GATE], weight_h, weight_x,
                 grad_weight_h, grad_weight_x, grad_bias_h, grad_bias_x,
                 grad_input_h, grad_input_x, bs, xl, hs);
+
 }
 
 //prim, pointer to internal tensors
 void THNN_(LSTM_updateOutput)(
       THNNState *state,
-      THLongTensor *primitives,
+      THFloatTensor *primitives,
       int init_ok,
       THTensor *input_c,
       THTensor *input_h,
@@ -366,14 +372,15 @@ void THNN_(LSTM_updateOutput)(
     float* b_x = (float*)bias_x->storage->data;
     float* b_h = (float*)bias_h->storage->data;
     float ** prim = (float**)primitives->storage->data;
-
+    printf("in c addr: %x\n", prim);
+    printf("val %f\n", prim[0]);
     THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h,
                 w_h, w_x, b_h, b_x, bs, xl, hs, init_ok);
 }
 
 void THNN_(LSTM_updateGradInput)(
       THNNState *state,
-      THLongTensor *primitives,
+      THFloatTensor *primitives,
       THTensor *input_c,
       THTensor *input_h,
       THTensor *input_x,
