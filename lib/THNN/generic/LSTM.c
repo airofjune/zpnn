@@ -22,6 +22,16 @@ static void THNN_(PrintVec)(float* a, const long len)
     printf("\n");
 }
 
+static void THNN_(Sum)(float* a, const long len)
+{
+    float sum = 0;
+    #pragma omp parallel for reduction(+:sum)
+    for(long i=0; i<len; ++i)
+        sum += a[i];
+    printf("sum is %f\n", sum);
+}
+
+
 static int THNN_(CompareVec)(float*a, float* b, const long len, const float gap)
 {
     for(long i=0; i<len; ++i)
@@ -70,16 +80,13 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
             const long bs, const long xl, const long hs)
 {
     //gate = input_x * weight_x  + input_h * weight_h + bias;
-    //TODO grad must be +=
     const long hs4 = hs*4;
-
-    //grad_input_h (bs*hs) = grad_gate(bs*hs4) * T(weight_h) (hs4*hs)
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, bs, hs, hs4, 1, grad_gate, hs4,
-                     weight_h, hs4, 1, grad_input_h, hs);
+                     weight_h, hs4, 0, grad_input_h, hs);
 
     //grad_input_x (bs*xl) = grad_gate(bs*hs4) * T(weight_x) (hs4*xl)
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, bs, xl, hs4, 1, grad_gate, hs4,
-                     weight_x, hs4, 1, grad_input_x, xl);
+                     weight_x, hs4, 0, grad_input_x, xl);
 
     //grad_weight_h (hs*hs4) = T(input_h) * grad_gate(bs*hs4)
     cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, hs, hs4, bs, 1, input_h, hs,
@@ -331,7 +338,7 @@ static void THNN_(Bprop)(
 
     THNN_(CopySplit_bprop)(prim[TEMP_GATE], bs, hs, prim[GRAD_GATE_I],
                 prim[GRAD_GATE_F], prim[GRAD_GATE_O], prim[GRAD_GATE_C]);
-
+   
     THNN_(Linear_bprop)(input_h, input_x, prim[TEMP_GATE], weight_h, weight_x,
                 grad_weight_h, grad_weight_x, grad_bias_h, grad_bias_x,
                 grad_input_h, grad_input_x, bs, xl, hs);
