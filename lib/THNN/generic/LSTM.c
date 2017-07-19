@@ -48,14 +48,14 @@ static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
     const long hs4 = hs*4;
 
     cblas_scopy(hs4, bias_x, 1, temp_bias, 1);
-
     cblas_saxpy(hs4, 1.0,  bias_h,  1, temp_bias, 1);
 
     #pragma omp parallel for
     for(int i=0; i<bs; ++i)
     {
-        cblas_scopy(hs4, temp_bias, 1, temp_gate+i*hs4, 1);
+       cblas_scopy(hs4, temp_bias, 1, temp_gate+i*hs4, 1);
     }
+
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, bs, hs4, xl, 1, input_x, xl,
                     weight_x, hs4, 1, temp_gate, hs4);
 
@@ -259,11 +259,7 @@ static void THNN_(TanhDot_bprop)(float* grad_out_c0, float* grad_out_h, float* t
 static int THNN_(InternalMemAlloc)(float** prim, const long bs, const long hs)
 {
     const long hs4 = hs * 4;
-    printf("bs, hs4 %d, %d\n", bs, hs4);
     prim[TEMP_GATE]    = (float*)malloc(sizeof(float)*bs*hs4);
-    printf("in c addr: %x\n", prim);
-    printf("val %x\n", prim[0]);
-    printf("val %x\n", prim[TEMP_GATE] );
     prim[GATE_I]       = (float*)malloc(sizeof(float)*bs*hs);
     prim[GATE_F]       = (float*)malloc(sizeof(float)*bs*hs);
     prim[GATE_C]       = (float*)malloc(sizeof(float)*bs*hs);
@@ -293,10 +289,10 @@ static void THNN_(Fprop)(
     const long hs4 = hs * 4;            //4 * hidden length, weight size
     if (!init_ok)
     {
-        THNN_(InternalMemAlloc)(prim, bs, hs);
+        THNN_(InternalMemAlloc)(prim, 64, hs);
     }
 
-    THNN_(Linear_fprop)(64, hs, xl, prim[TEMP_BIAS], bias_h, bias_x, prim[TEMP_GATE],
+    THNN_(Linear_fprop)(bs, hs, xl, prim[TEMP_BIAS], bias_h, bias_x, prim[TEMP_GATE],
                 weight_h, weight_x, input_h, input_x);
 
     //sigmoid and split
@@ -357,6 +353,7 @@ void THNN_(LSTM_updateOutput)(
       THTensor *bias_h,
       THTensor *bias_x)
 {
+
     long bs = input_x->size[0];   //batch size
     long xl = input_x->size[1];   //input feature length
     long hs = input_h->size[1];   //hidden length
@@ -372,8 +369,6 @@ void THNN_(LSTM_updateOutput)(
     float* b_x = (float*)bias_x->storage->data;
     float* b_h = (float*)bias_h->storage->data;
     float ** prim = (float**)primitives->storage->data;
-    printf("in c addr: %x\n", prim);
-    printf("val %f\n", prim[0]);
     THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h,
                 w_h, w_x, b_h, b_x, bs, xl, hs, init_ok);
 }
