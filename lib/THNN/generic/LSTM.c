@@ -81,6 +81,7 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
 {
     //gate = input_x * weight_x  + input_h * weight_h + bias;
     const long hs4 = hs*4;
+    //grad_input_h (bs*hs) = grad_gate(bs*hs4) * T(weight_h) (hs4*hs)
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, bs, hs, hs4, 1, grad_gate, hs4,
                      weight_h, hs4, 0, grad_input_h, hs);
 
@@ -338,7 +339,7 @@ static void THNN_(Bprop)(
 
     THNN_(CopySplit_bprop)(prim[TEMP_GATE], bs, hs, prim[GRAD_GATE_I],
                 prim[GRAD_GATE_F], prim[GRAD_GATE_O], prim[GRAD_GATE_C]);
-   
+
     THNN_(Linear_bprop)(input_h, input_x, prim[TEMP_GATE], weight_h, weight_x,
                 grad_weight_h, grad_weight_x, grad_bias_h, grad_bias_x,
                 grad_input_h, grad_input_x, bs, xl, hs);
