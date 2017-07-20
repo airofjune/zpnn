@@ -31,7 +31,6 @@ static void THNN_(Sum)(float* a, const long len)
     printf("sum is %f\n", sum);
 }
 
-
 static int THNN_(CompareVec)(float*a, float* b, const long len, const float gap)
 {
     for(long i=0; i<len; ++i)
@@ -101,7 +100,6 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
     #pragma omp parallel for
     for(long i=0; i<hs4; ++i)
     {
-        grad_bias_h[i] = 0;
         for(long j=0; j<bs; ++j)
             grad_bias_h[i] += grad_gate[j*hs4+i];
         grad_bias_x[i] = grad_bias_h[i];
