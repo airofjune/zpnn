@@ -62,7 +62,16 @@ static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
     #pragma omp parallel for
     for(int i=0; i<bs; ++i)
     {
-       cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
+    	float* temp = temp_gate + i * hs4;
+        for (long j=0; j<=((hs4)-16); j+=16) {
+    	    _mm512_storeu_ps(temp+j, _mm512_loadu_ps(bias_h+j));
+        }
+        long off = (hs4) - ((hs4)%16);
+        for (long j=off; i<hs4; ++j) {
+           temp[j] = bias_h[j];
+        }
+
+//        cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
     }
 
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, bs, hs4, xl, 1, input_x, xl,
@@ -133,8 +142,8 @@ static void THNN_(CopySplit_fprop)(float* pIn, const long bs, const long hs,
     #pragma omp parallel for
     for(long i=0; i<bs; ++i)
     {
-        float* pStart = pIn + i*hs*4;
         const long ihs = i * hs;
+        float* pStart = pIn + ihs*4;
         for(long j=0; j<hs; ++j)
             p1[ihs+j] = pStart[j];
         pStart += hs;
