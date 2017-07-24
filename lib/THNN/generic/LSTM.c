@@ -56,13 +56,13 @@ static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
     //TODO, combine two bias together
     const long hs4 = hs*4;
 
-    cblas_scopy(hs4, bias_x, 1, temp_bias, 1);
-    cblas_saxpy(hs4, 1.0,  bias_h,  1, temp_bias, 1);
+    //cblas_scopy(hs4, bias_x, 1, temp_bias, 1);
+    //cblas_saxpy(hs4, 1.0,  bias_h,  1, temp_bias, 1);
 
     #pragma omp parallel for
     for(int i=0; i<bs; ++i)
     {
-       cblas_scopy(hs4, temp_bias, 1, temp_gate+i*hs4, 1);
+       cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
     }
 
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, bs, hs4, xl, 1, input_x, xl,
@@ -102,7 +102,6 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
     {
         for(long j=0; j<bs; ++j)
             grad_bias_h[i] += grad_gate[j*hs4+i];
-        grad_bias_x[i] = grad_bias_h[i];
     }
 }
 
