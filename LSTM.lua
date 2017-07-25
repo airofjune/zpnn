@@ -149,3 +149,7 @@ function LSTM:__tostring__()
       string.format('(%d -> %d)', self.weight_x:size(2), self.weight_x:size(1)) ..
       (self.bias == nil and ' without bias' or '')
 end
+
+function LSTM:profile(input)
+  input.THNN.LSTM_profile()
+end
