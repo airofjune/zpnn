@@ -428,9 +428,10 @@ void THNN_(LSTM_updateOutput)(
       THTensor *bias_h,
       THTensor *bias_x)
 {
-
+#if LOG_ON
     struct Timer sum;
     Start(&sum);
+#endif
 
     long bs = input_x->size[0];   //batch size
     long xl = input_x->size[1];   //input feature length
@@ -472,8 +473,11 @@ void THNN_(LSTM_updateGradInput)(
       THTensor *grad_input_h,
       THTensor *grad_input_x)
 {
+
+#if LOG_ON
     struct Timer sum;
     Start(&sum);
+#endif
 
     long bs = input_x->size[0];   //batch size
     long xl = input_x->size[1];   //input feature length
@@ -507,7 +511,14 @@ void THNN_(LSTM_updateGradInput)(
 void THNN_(LSTM_profile)(THNNState *state)
 {
     struct Profiler* a = &prof;
+    printf("------------- profile result -----------\n");
     printf("sum  time  is %f\n", a->sum);
+    if(a->sum<0.0000001f)
+    {
+        printf("please set LOG_ON 1 to profile LSTM\n");
+        printf("------------- profile done -----------\n");
+        return;
+    }
     printf("gemm time  is %f\t%f%\n", a->gemm, a->gemm/a->sum*100);
     printf("sig  time  is %f\t%f%\n", a->tanh, a->tanh/a->sum*100);
     printf("tanh time  is %f\t%f%\n", a->sig,  a->sig /a->sum*100);
@@ -521,9 +532,28 @@ void THNN_(LSTM_profile)(THNNState *state)
     printf("split_b    is %f\t%f%\n", a->copy_split_b, a->copy_split_b/a->sum*100);
     printf("dot_out_f  is %f\t%f%\n", a->dot_out_f, a->dot_out_f/a->sum*100);
     printf("dot_out_b  is %f\t%f%\n", a->dot_out_b, a->dot_out_b/a->sum*100);
-    float sum = a->gate_sig_f + a->tanh_dot_b + a->tanh_dot_b + a->lin_b + a->lin_f
+    float sum = a->gate_sig_f + a->tanh_dot_b + a->tanh_dot_f + a->lin_b + a->lin_f
               + a->copy_split_b + a->copy_split_f + a->dot_out_f + a->dot_out_b;
     printf("sum all is %f%\n", sum/a->sum*100);
+    printf("------------- profile done -----------\n");
+
+}
+
+void THNN_(LSTM_resetProfile)(THNNState *state)
+{
+    prof.gemm = 0.0f;
+    prof.tanh = 0.0f;
+    prof.sig = 0.0f;
+    prof.lin_f = 0.0f;
+    prof.lin_b = 0.0f;
+    prof.gate_sig_f = 0.0f;
+    prof.tanh_dot_f = 0.0f;
+    prof.tanh_dot_b = 0.0f;
+    prof.copy_split_f = 0.0f;
+    prof.copy_split_b = 0.0f;
+    prof.dot_out_f = 0.0f;
+    prof.dot_out_b = 0.0f;
+    prof.sum = 0.0f;
 
 }
 #endif

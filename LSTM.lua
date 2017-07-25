@@ -153,3 +153,7 @@ end
 function LSTM:profile(input)
   input.THNN.LSTM_profile()
 end
+
+function LSTM:resetProfile(input)
+  input.THNN.LSTM_resetProfile()
+end

@@ -34,6 +34,7 @@ TH_API void THNN_(LSTM_updateGradInput)(
       THTensor *grad_input_h,
       THTensor *grad_input_x);
 TH_API void THNN_(LSTM_profile)(THNNState *state);
+TH_API void THNN_(LSTM_resetProfile)(THNNState *state);
 
 TH_API void THNN_(Abs_updateOutput)(
           THNNState *state,            // library's state
