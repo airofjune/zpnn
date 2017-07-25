@@ -46,6 +46,20 @@ static int THNN_(CompareVec)(float*a, float* b, const long len, const float gap)
     return 0;
 }
 
+
+inline void THNN_(copy_avx_512)(float* src, float* dst, const long len)
+{
+    long j;
+    for (j=0; j<=((len)-16); j+=16) {
+        _mm512_storeu_ps(dst+j, _mm512_loadu_ps(src+j));
+    }
+    long off = (len) - ((len)%16);
+    for (j=off; j<len; ++j) {
+        dst[j] = src[j];
+    }
+}
+
+
 static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
             float * temp_bias, float* bias_h, float* bias_x,
             float* temp_gate,  float* weight_h, float* weight_x,
@@ -53,25 +67,11 @@ static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
 {
     //gate = input_x * weight_x  + input_h * weight_h + bias_x + bias_h;
     //add bias for each batch
-    //TODO, combine two bias together
     const long hs4 = hs*4;
-
-    //cblas_scopy(hs4, bias_x, 1, temp_bias, 1);
-    //cblas_saxpy(hs4, 1.0,  bias_h,  1, temp_bias, 1);
-
     #pragma omp parallel for
     for(int i=0; i<bs; ++i)
     {
-    	float* temp = temp_gate + i * hs4;
-        for (long j=0; j<=((hs4)-16); j+=16) {
-    	    _mm512_storeu_ps(temp+j, _mm512_loadu_ps(bias_h+j));
-        }
-        long off = (hs4) - ((hs4)%16);
-        for (long j=off; i<hs4; ++j) {
-           temp[j] = bias_h[j];
-        }
-
-//        cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
+        cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
     }
 
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, bs, hs4, xl, 1, input_x, xl,
@@ -217,8 +217,10 @@ static void THNN_(DotOutput_fprop)(float* output_c, const long len, float* gate_
                     float* gate_i, float* gate_c, float* input_c)
 {
     //output_c = gate_f .* input_c + gate_i .* gate_c
-    THNN_(DotMul)(output_c, len, gate_f, input_c, 0);
-    THNN_(DotMul)(output_c, len, gate_i, gate_c,  1);
+    #pragma omp parallel for
+    for(long i=0; i<len; ++i)
+        output_c[i] = gate_f[i] * input_c[i] + gate_i[i] * gate_c[i];
+    
 }
 
 static void THNN_(DotOutput_bprop)(float* gate_f,float* gate_i, float* gate_c, float* input_c,
