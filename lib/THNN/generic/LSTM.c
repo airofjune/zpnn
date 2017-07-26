@@ -133,29 +133,22 @@ static void THNN_(GateSigmoid_fprop)(float* gateValue, const long bs, const long
     Start(&sig);
 #endif
     const long hs4 = hs * 4;
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for 
     for(long i=0; i<bs; ++i)
     {
-        for(long j=0; j<3*hs; ++j)
+        const long ihs4 = i*hs4;
+        long j = 0;
+        for( ; j<3*hs; ++j)
         {
-            gateValue[i*hs4 + j] = THNN_(Sigmoid)(gateValue[i*hs4 + j]);
+            gateValue[ihs4 + j] = THNN_(Sigmoid)(gateValue[ihs4 + j]);
         }
+        for( ; j<hs4; ++j)
+        {
+            gateValue[ihs4 + j] = tanh(gateValue[ihs4 + j]);
+	}
     }
 #if LOG_ON
     prof.sig += End(&sig);
-    struct Timer tan;
-    Start(&tan);
-#endif
-    #pragma omp parallel for collapse(2)
-    for(long i=0; i<bs; ++i)
-    {
-        for(long j=3*hs; j<hs4; ++j)
-        {
-            gateValue[i*hs4 + j] = tanh(gateValue[i*hs4 + j]);
-        }
-    }
-#if LOG_ON
-    prof.tanh+= End(&tan);
 #endif
 }
 
@@ -168,16 +161,24 @@ static void THNN_(CopySplit_fprop)(float* pIn, const long bs, const long hs,
         const long ihs = i * hs;
         float* pStart = pIn + ihs*4;
         for(long j=0; j<hs; ++j)
-            p1[ihs+j] = pStart[j];
+        {
+	   p1[ihs+j] = pStart[j];
+        }
         pStart += hs;
         for(long j=0; j<hs; ++j)
-            p2[ihs+j] = pStart[j];
+        {
+           p2[ihs+j] = pStart[j];
+        }
         pStart += hs;
         for(long j=0; j<hs; ++j)
-            p3[ihs+j] = pStart[j];
+        {
+           p3[ihs+j] = pStart[j];
+        }
         pStart += hs;
         for(long j=0; j<hs; ++j)
-            p4[ihs+j] = pStart[j];
+        {
+           p4[ihs+j] = pStart[j];
+        }
     }
 }
 
@@ -285,13 +286,13 @@ static void THNN_(TanhDot_bprop)(float* grad_out_c0, float* grad_out_h, float* t
     //output_h = gate_o .* c_tanh
     //grad_output_c  = grad_output_c + (1-c_tanh.*c_tanh).*gate_o.*grad_output_h
     //grad_gate_o    = grad_output_h .* c_thanh
-    cblas_scopy(len, grad_out_c0, 1, grad_out_c1, 1);
+    //cblas_scopy(len, grad_out_c0, 1, grad_out_c1, 1);
     #pragma omp parallel for
     for(long i=0; i<len; ++i)
     {
         const float c = tanhC[i];
         grad_gate_o[i] = grad_out_h[i] * c;
-        grad_out_c1[i] += (1 - c*c) * gate_o[i] * grad_out_h[i];
+        grad_out_c1[i] = grad_out_c0[i] + (1 - c*c) * gate_o[i] * grad_out_h[i];
     }
 }
 
@@ -521,7 +522,6 @@ void THNN_(LSTM_profile)(THNNState *state)
     }
     printf("gemm time  is %f\t%f%\n", a->gemm, a->gemm/a->sum*100);
     printf("sig  time  is %f\t%f%\n", a->tanh, a->tanh/a->sum*100);
-    printf("tanh time  is %f\t%f%\n", a->sig,  a->sig /a->sum*100);
     printf("--------------------\n");
     printf("gate_sig_f is %f\t%f%\n", a->gate_sig_f, a->gate_sig_f/a->sum*100);
     printf("lin_f      is %f\t%f%\n", a->lin_f, a->lin_f/a->sum*100);
