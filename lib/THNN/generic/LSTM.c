@@ -162,22 +162,26 @@ static void THNN_(CopySplit_fprop)(float* pIn, const long bs, const long hs,
         float* pStart = pIn + ihs*4;
         for(long j=0; j<hs; ++j)
         {
-	   p1[ihs+j] = pStart[j];
+	    pStart[j] = THNN_(Sigmoid)(pStart[j]);
+            p1[ihs+j] = pStart[j];
         }
         pStart += hs;
         for(long j=0; j<hs; ++j)
         {
-           p2[ihs+j] = pStart[j];
+	    pStart[j] = THNN_(Sigmoid)(pStart[j]);
+            p2[ihs+j] = pStart[j];
         }
         pStart += hs;
         for(long j=0; j<hs; ++j)
         {
-           p3[ihs+j] = pStart[j];
+	    pStart[j] = THNN_(Sigmoid)(pStart[j]);
+            p3[ihs+j] = pStart[j];
         }
         pStart += hs;
         for(long j=0; j<hs; ++j)
         {
-           p4[ihs+j] = pStart[j];
+	    pStart[j] = tanh(pStart[j]);
+            p4[ihs+j] = pStart[j];
         }
     }
 }
@@ -349,7 +353,7 @@ static void THNN_(Fprop)(
     //gate_f = sig(gate[:,1])
     //gate_o = sig(gate[:,2])
     //gate_c = tanh(gate[:,3])
-    THNN_(GateSigmoid_fprop)(prim[TEMP_GATE], bs, hs);
+    //THNN_(GateSigmoid_fprop)(prim[TEMP_GATE], bs, hs);
 #if LOG_ON
     prof.gate_sig_f += End(&t);
     Start(&t);
