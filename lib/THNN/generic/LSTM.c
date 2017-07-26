@@ -283,8 +283,10 @@ static void THNN_(TanhDot_fprop)(float* out, float* tanC, const float* in, const
     }
 }
 
-static void THNN_(TanhDot_bprop)(float* grad_out_c0, float* grad_out_h, float* tanhC,
-    float* gate_o, float* grad_out_c1, float* grad_gate_o, const long len)
+static void THNN_(TanhDot_bprop)(float* grad_out_c, float* grad_out_h, float* tanhC, float* input_c,
+    float* gate_i, float* gate_f, float* gate_o, float* gate_c,
+    float* grad_gate_i, float* grad_gate_f, float* grad_gate_o, float* grad_gate_c,
+    float* grad_input_c,  const long len)
 {
     //c_tanh = tanh(output_c)
     //output_h = gate_o .* c_tanh
@@ -296,7 +298,11 @@ static void THNN_(TanhDot_bprop)(float* grad_out_c0, float* grad_out_h, float* t
     {
         const float c = tanhC[i];
         grad_gate_o[i] = grad_out_h[i] * c;
-        grad_out_c1[i] = grad_out_c0[i] + (1 - c*c) * gate_o[i] * grad_out_h[i];
+        const float d = grad_out_c[i] + (1 - c*c) * gate_o[i] * grad_out_h[i];
+        grad_input_c[i] = d * gate_f[i];
+        grad_gate_f[i]  = d * input_c[i];
+        grad_gate_i[i]  = d * gate_c[i];
+        grad_gate_c[i]  = d * gate_i[i];
     }
 }
 
@@ -390,15 +396,20 @@ static void THNN_(Bprop)(
     struct Timer t;
     Start(&t);
 #endif
-    THNN_(TanhDot_bprop)(grad_out_c, grad_out_h, prim[C_TANH], prim[GATE_O],
-                prim[GRAD_OUTPUT_C], prim[GRAD_GATE_O], bs*hs);
+    //THNN_(TanhDot_bprop)(grad_out_c, grad_out_h, prim[C_TANH], prim[GATE_O],
+    //            prim[GRAD_OUTPUT_C], prim[GRAD_GATE_O], bs*hs);
 #if LOG_ON
     prof.tanh_dot_b += End(&t);
     Start(&t);
 #endif
-    THNN_(DotOutput_bprop)(prim[GATE_F], prim[GATE_I], prim[GATE_C], input_c,
-                prim[GRAD_OUTPUT_C], grad_input_c, prim[GRAD_GATE_F],
-                prim[GRAD_GATE_I], prim[GRAD_GATE_C], bs*hs);
+    //THNN_(DotOutput_bprop)(prim[GATE_F], prim[GATE_I], prim[GATE_C], input_c,
+    //            prim[GRAD_OUTPUT_C], grad_input_c, prim[GRAD_GATE_F],
+    //            prim[GRAD_GATE_I], prim[GRAD_GATE_C], bs*hs);
+
+    THNN_(TanhDot_bprop)(grad_out_c, grad_out_h, prim[C_TANH], input_c,
+            prim[GATE_I], prim[GATE_F], prim[GATE_O], prim[GATE_C],
+            prim[GRAD_GATE_I], prim[GRAD_GATE_F], prim[GRAD_GATE_O], prim[GRAD_GATE_C],
+            grad_input_c, bs*hs);
 #if LOG_ON
     prof.dot_out_b += End(&t);
     Start(&t);
