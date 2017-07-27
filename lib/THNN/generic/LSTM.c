@@ -30,7 +30,7 @@ static void THNN_(Sum)(float* a, const long len)
     printf("sum is %f\n", sum);
 }
 
-static int THNN_(CompareVec)(float*a, float* b, const long len, const float gap)
+static  int THNN_(CompareVec)(float*a, float* b, const long len, const float gap)
 {
     for(long i=0; i<len; ++i)
     {
@@ -45,7 +45,6 @@ static int THNN_(CompareVec)(float*a, float* b, const long len, const float gap)
     return 0;
 }
 
-
 inline void THNN_(copy_avx_512)(float* src, float* dst, const long len)
 {
     long j;
@@ -57,7 +56,6 @@ inline void THNN_(copy_avx_512)(float* src, float* dst, const long len)
         dst[j] = src[j];
     }
 }
-
 
 static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
             float * temp_bias, float* bias_h, float* bias_x,
@@ -125,7 +123,6 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
             grad_bias_h[i] += grad_gate[j*hs4+i];
     }
 }
-
 
 static void THNN_(CopySplit_fprop)(float* pIn, const long bs, const long hs,
     float* p1, float* p2, float* p3, float* p4)
@@ -336,7 +333,7 @@ static void THNN_(Bprop)(
             grad_input_c, bs*hs);
 
 #if LOG_ON
-    prof.dot_out_b += End(&t);
+    prof.tanh_dot_b += End(&t);
     Start(&t);
 #endif
 
