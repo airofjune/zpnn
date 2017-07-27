@@ -126,31 +126,6 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
     }
 }
 
-static void THNN_(GateSigmoid_fprop)(float* gateValue, const long bs, const long hs)
-{
-#if LOG_ON
-    struct Timer sig;
-    Start(&sig);
-#endif
-    const long hs4 = hs * 4;
-    #pragma omp parallel for 
-    for(long i=0; i<bs; ++i)
-    {
-        const long ihs4 = i*hs4;
-        long j = 0;
-        for( ; j<3*hs; ++j)
-        {
-            gateValue[ihs4 + j] = THNN_(Sigmoid)(gateValue[ihs4 + j]);
-        }
-        for( ; j<hs4; ++j)
-        {
-            gateValue[ihs4 + j] = tanh(gateValue[ihs4 + j]);
-	}
-    }
-#if LOG_ON
-    prof.sig += End(&sig);
-#endif
-}
 
 static void THNN_(CopySplit_fprop)(float* pIn, const long bs, const long hs,
     float* p1, float* p2, float* p3, float* p4)
@@ -225,57 +200,11 @@ static void THNN_(CopySplit_bprop)(float* pIn, const long bs, const long hs,
     }
 }
 
-static void THNN_(DotMul)(float* z, const long len, const float* x, const float*y, int add)
-{
-    if(add)
-    {
-        #pragma omp parallel for
-        for(long i=0; i<len; ++i)
-            z[i] += x[i] * y[i];
-    }
-    else
-    {
-        #pragma omp parallel for
-        for(long i=0; i<len; ++i)
-            z[i] = x[i] * y[i];
-    }
-}
-
-static void THNN_(DotOutput_bprop)(float* gate_f,float* gate_i, float* gate_c, float* input_c,
-                float* grad_output_c, float* grad_input_c, float* grad_gate_f,
-                float* grad_gate_i, float* grad_gate_c, const long len)
-{
-    //output_c = gate_f .* input_c + gate_i .* gate_c
-    //grad_input_c = grad_output_c .* gate_f
-    //grad_gate_f  = grad_output_c .* input_c
-    //grad_gate_i  = grad_output_c .* gate_c
-    //grad_gate_c  = grad_output_c .* gate_i
-    #pragma omp parallel for
-    for(long i=0; i<len; ++i)
-    {
-        const float c = grad_output_c[i];
-        grad_input_c[i] = c * gate_f[i];
-        grad_gate_f[i]  = c * input_c[i];
-        grad_gate_i[i]  = c * gate_c[i];
-        grad_gate_c[i]  = c * gate_i[i];
-    }
-}
-
-static void THNN_(DotOutput_fprop)(float* output_c, const long len, float* gate_f,
-                    float* gate_i, float* gate_c, float* input_c)
-{
-    //output_c = gate_f .* input_c + gate_i .* gate_c
-    #pragma omp parallel for
-    for(long i=0; i<len; ++i)
-        output_c[i] = gate_f[i] * input_c[i] + gate_i[i] * gate_c[i];
-
-}
-
-
 static void THNN_(TanhDot_fprop)(float* output_c, float* output_h, float* tanC,
            float* gate_f, float* gate_i, float* gate_c, float* gate_o,
            float* input_c,const long len)
 {
+    //output_c = gate_f .* input_c + gate_i .* gate_c
     //c_tanh = tanh(output_c)
     //output_h = gate_o .* c_tanh
     #pragma omp parallel for
@@ -292,11 +221,15 @@ static void THNN_(TanhDot_bprop)(float* grad_out_c, float* grad_out_h, float* ta
     float* grad_gate_i, float* grad_gate_f, float* grad_gate_o, float* grad_gate_c,
     float* grad_input_c,  const long len)
 {
+    //output_c = gate_f .* input_c + gate_i .* gate_c
+    //grad_input_c = grad_output_c .* gate_f
+    //grad_gate_f  = grad_output_c .* input_c
+    //grad_gate_i  = grad_output_c .* gate_c
+    //grad_gate_c  = grad_output_c .* gate_i
     //c_tanh = tanh(output_c)
     //output_h = gate_o .* c_tanh
     //grad_output_c  = grad_output_c + (1-c_tanh.*c_tanh).*gate_o.*grad_output_h
     //grad_gate_o    = grad_output_h .* c_thanh
-    //cblas_scopy(len, grad_out_c0, 1, grad_out_c1, 1);
     #pragma omp parallel for
     for(long i=0; i<len; ++i)
     {
@@ -358,31 +291,23 @@ static void THNN_(Fprop)(
     prof.lin_f += End(&t);
     Start(&t);
 #endif
+
     //sigmoid and split
     //gate_i = sig(gate[:,0])
     //gate_f = sig(gate[:,1])
     //gate_o = sig(gate[:,2])
     //gate_c = tanh(gate[:,3])
-    //THNN_(GateSigmoid_fprop)(prim[TEMP_GATE], bs, hs);
-#if LOG_ON
-    prof.gate_sig_f += End(&t);
-    Start(&t);
-#endif
     THNN_(CopySplit_fprop)(prim[TEMP_GATE], bs, hs, prim[GATE_I], prim[GATE_F], prim[GATE_O], prim[GATE_C]);
+
 #if LOG_ON
     prof.copy_split_f += End(&t);
     Start(&t);
 #endif
-    //THNN_(DotOutput_fprop)(output_c, bs*hs, prim[GATE_F],
-    //                prim[GATE_I], prim[GATE_C], input_c);
-#if LOG_ON
-    prof.dot_out_f += End(&t);
-    Start(&t);
-#endif
-    //THNN_(TanhDot_fprop)(output_h, prim[C_TANH], output_c, prim[GATE_O], bs*hs);
+
     THNN_(TanhDot_fprop)(output_c, output_h, prim[C_TANH],
            prim[GATE_F], prim[GATE_I], prim[GATE_C], prim[GATE_O],
            input_c, bs*hs);
+
 #if LOG_ON
     prof.tanh_dot_f += End(&t);
 #endif
@@ -399,37 +324,34 @@ static void THNN_(Bprop)(
       const long bs, const long xl, const long hs)
 {
     const long hs4 = hs * 4;
+
 #if LOG_ON
     struct Timer t;
     Start(&t);
 #endif
-    //THNN_(TanhDot_bprop)(grad_out_c, grad_out_h, prim[C_TANH], prim[GATE_O],
-    //            prim[GRAD_OUTPUT_C], prim[GRAD_GATE_O], bs*hs);
-#if LOG_ON
-    prof.tanh_dot_b += End(&t);
-    Start(&t);
-#endif
-    //THNN_(DotOutput_bprop)(prim[GATE_F], prim[GATE_I], prim[GATE_C], input_c,
-    //            prim[GRAD_OUTPUT_C], grad_input_c, prim[GRAD_GATE_F],
-    //            prim[GRAD_GATE_I], prim[GRAD_GATE_C], bs*hs);
 
     THNN_(TanhDot_bprop)(grad_out_c, grad_out_h, prim[C_TANH], input_c,
             prim[GATE_I], prim[GATE_F], prim[GATE_O], prim[GATE_C],
             prim[GRAD_GATE_I], prim[GRAD_GATE_F], prim[GRAD_GATE_O], prim[GRAD_GATE_C],
             grad_input_c, bs*hs);
+
 #if LOG_ON
     prof.dot_out_b += End(&t);
     Start(&t);
 #endif
+
     THNN_(CopySplit_bprop)(prim[TEMP_GATE], bs, hs, prim[GRAD_GATE_I],
                 prim[GRAD_GATE_F], prim[GRAD_GATE_O], prim[GRAD_GATE_C]);
+
 #if LOG_ON
     prof.copy_split_b += End(&t);
     Start(&t);
 #endif
+
     THNN_(Linear_bprop)(input_h, input_x, prim[TEMP_GATE], weight_h, weight_x,
                 grad_weight_h, grad_weight_x, grad_bias_h, grad_bias_x,
                 grad_input_h, grad_input_x, bs, xl, hs);
+
 #if LOG_ON
     prof.lin_b += End(&t);
     Start(&t);
@@ -545,17 +467,14 @@ void THNN_(LSTM_profile)(THNNState *state)
     printf("gemm time  is %f\t%f%\n", a->gemm, a->gemm/a->sum*100);
     printf("sig  time  is %f\t%f%\n", a->tanh, a->tanh/a->sum*100);
     printf("--------------------\n");
-    printf("gate_sig_f is %f\t%f%\n", a->gate_sig_f, a->gate_sig_f/a->sum*100);
     printf("lin_f      is %f\t%f%\n", a->lin_f, a->lin_f/a->sum*100);
     printf("lin_b      is %f\t%f%\n", a->lin_b, a->lin_b/a->sum*100);
     printf("tanh_dot_f is %f\t%f%\n", a->tanh_dot_f, a->tanh_dot_f/a->sum*100);
     printf("tanh_dot_b is %f\t%f%\n", a->tanh_dot_b, a->tanh_dot_b/a->sum*100);
     printf("split_f    is %f\t%f%\n", a->copy_split_f, a->copy_split_f/a->sum*100);
     printf("split_b    is %f\t%f%\n", a->copy_split_b, a->copy_split_b/a->sum*100);
-    printf("dot_out_f  is %f\t%f%\n", a->dot_out_f, a->dot_out_f/a->sum*100);
-    printf("dot_out_b  is %f\t%f%\n", a->dot_out_b, a->dot_out_b/a->sum*100);
-    float sum = a->gate_sig_f + a->tanh_dot_b + a->tanh_dot_f + a->lin_b + a->lin_f
-              + a->copy_split_b + a->copy_split_f + a->dot_out_f + a->dot_out_b;
+    float sum = a->tanh_dot_b + a->tanh_dot_f + a->lin_b + a->lin_f
+              + a->copy_split_b + a->copy_split_f;
     printf("sum all is %f%\n", sum/a->sum*100);
     printf("------------- profile done -----------\n");
 
