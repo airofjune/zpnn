@@ -109,7 +109,7 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
 static void THNN_(GateSigmoid_fprop)(float* gateValue, const long bs, const long hs)
 {
     const long hs4 = hs * 4;
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for 
     for(long i=0; i<bs; ++i)
     {
         for(long j=0; j<3*hs; ++j)
@@ -118,7 +118,7 @@ static void THNN_(GateSigmoid_fprop)(float* gateValue, const long bs, const long
         }
     }
 
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for 
     for(long i=0; i<bs; ++i)
     {
         for(long j=3*hs; j<hs4; ++j)
