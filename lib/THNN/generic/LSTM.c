@@ -241,6 +241,16 @@ static void THNN_(DotMul)(float* z, const long len, const float* x, const float*
     }
 }
 
+static void THNN_(DotOutput_fprop)(float* output_c, const long len, float* gate_f,
+                    float* gate_i, float* gate_c, float* input_c)
+{
+    //output_c = gate_f .* input_c + gate_i .* gate_c
+    #pragma omp parallel for
+    for(long i=0; i<len; ++i)
+        output_c[i] = gate_f[i] * input_c[i] + gate_i[i] * gate_c[i];
+    
+}
+
 static void THNN_(DotOutput_bprop)(float* gate_f,float* gate_i, float* gate_c, float* input_c,
                 float* grad_output_c, float* grad_input_c, float* grad_gate_f,
                 float* grad_gate_i, float* grad_gate_c, const long len)
@@ -261,29 +271,15 @@ static void THNN_(DotOutput_bprop)(float* gate_f,float* gate_i, float* gate_c, f
     }
 }
 
-static void THNN_(DotOutput_fprop)(float* output_c, const long len, float* gate_f,
-                    float* gate_i, float* gate_c, float* input_c)
-{
-    //output_c = gate_f .* input_c + gate_i .* gate_c
-    #pragma omp parallel for
-    for(long i=0; i<len; ++i)
-        output_c[i] = gate_f[i] * input_c[i] + gate_i[i] * gate_c[i];
-
-}
-
-
-static void THNN_(TanhDot_fprop)(float* output_c, float* output_h, float* tanC,
-           float* gate_f, float* gate_i, float* gate_c, float* gate_o,
-           float* input_c,const long len)
+static void THNN_(TanhDot_fprop)(float* out, float* tanC, const float* in, const float* dotIn, const long len)
 {
     //c_tanh = tanh(output_c)
     //output_h = gate_o .* c_tanh
     #pragma omp parallel for
     for(long i=0; i<len; ++i)
     {
-        output_c[i] = gate_f[i] * input_c[i] + gate_i[i] * gate_c[i];
-        tanC[i] = tanh(output_c[i]);
-        output_h[i] = tanC[i] * gate_o[i];
+        tanC[i] = tanh(in[i]);
+        out[i] = tanC[i] * dotIn[i];
     }
 }
 
@@ -373,16 +369,13 @@ static void THNN_(Fprop)(
     prof.copy_split_f += End(&t);
     Start(&t);
 #endif
-    //THNN_(DotOutput_fprop)(output_c, bs*hs, prim[GATE_F],
-    //                prim[GATE_I], prim[GATE_C], input_c);
+    THNN_(DotOutput_fprop)(output_c, bs*hs, prim[GATE_F],
+                    prim[GATE_I], prim[GATE_C], input_c);
 #if LOG_ON
     prof.dot_out_f += End(&t);
     Start(&t);
 #endif
-    //THNN_(TanhDot_fprop)(output_h, prim[C_TANH], output_c, prim[GATE_O], bs*hs);
-    THNN_(TanhDot_fprop)(output_c, output_h, prim[C_TANH],
-           prim[GATE_F], prim[GATE_I], prim[GATE_C], prim[GATE_O],
-           input_c, bs*hs);
+    THNN_(TanhDot_fprop)(output_h, prim[C_TANH], output_c, prim[GATE_O], bs*hs);
 #if LOG_ON
     prof.tanh_dot_f += End(&t);
 #endif
