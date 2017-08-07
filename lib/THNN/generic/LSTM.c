@@ -384,11 +384,11 @@ void THNN_(LSTM_updateOutput)(
     float* in_h = (float*)THTensor_(data)(input_h);
     float* in_x = (float*)THTensor_(data)(input_x);
     float* out_c = (float*)THTensor_(data)(output_c);
-    float* out_h = (float*)THTensor_(data)(output_h);
-    float* w_x = (float*)THTensor_(data)(weight_x);
-    float* w_h = (float*)THTensor_(data)(weight_h);
-    float* b_x = (float*)THTensor_(data)(bias_x);
-    float* b_h = (float*)THTensor_(data)(bias_h);
+    float* out_h = (float*)output_h->storage->data;
+    float* w_x = (float*)weight_x->storage->data;
+    float* w_h = (float*)weight_h->storage->data;
+    float* b_x = (float*)bias_x->storage->data;
+    float* b_h = (float*)bias_h->storage->data;
     float ** prim = (float**)primitives->storage->data;
     THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h,
                 w_h, w_x, b_h, b_x, bs, xl, hs, init_ok);
@@ -426,20 +426,20 @@ void THNN_(LSTM_updateGradInput)(
     long hs = input_h->size[1];   //hidden length
     long hs4 = hs * 4;            //4 * hidden length, weight size
 
-    float* in_c = (float*)THTensor_(data)(input_c);
-    float* in_h = (float*)THTensor_(data)(input_h);
-    float* in_x = (float*)THTensor_(data)(input_x);
-    float* w_x = (float*)THTensor_(data)(weight_x);
-    float* w_h = (float*)THTensor_(data)(weight_h);
-    float* grad_in_c = (float*)THTensor_(data)(grad_input_c);
-    float* grad_in_h = (float*)THTensor_(data)(grad_input_h);
-    float* grad_in_x = (float*)THTensor_(data)(grad_input_x);
-    float* grad_out_c = (float*)THTensor_(data)(grad_output_c);
-    float* grad_out_h = (float*)THTensor_(data)(grad_output_h);
-    float* grad_w_x = (float*)THTensor_(data)(grad_weight_x);
-    float* grad_w_h = (float*)THTensor_(data)(grad_weight_h);
-    float* grad_b_x = (float*)THTensor_(data)(grad_bias_x);
-    float* grad_b_h = (float*)THTensor_(data)(grad_bias_h);
+    float* in_c = (float*)input_c->storage->data;
+    float* in_h = (float*)input_h->storage->data;
+    float* in_x = (float*)input_x->storage->data;
+    float* w_x = (float*)weight_x->storage->data;
+    float* w_h = (float*)weight_h->storage->data;
+    float* grad_in_c = (float*)grad_input_c->storage->data;
+    float* grad_in_h = (float*)grad_input_h->storage->data;
+    float* grad_in_x = (float*)grad_input_x->storage->data;
+    float* grad_out_c = (float*)grad_output_c->storage->data;
+    float* grad_out_h = (float*)grad_output_h->storage->data;
+    float* grad_w_x = (float*)grad_weight_x->storage->data;
+    float* grad_w_h = (float*)grad_weight_h->storage->data;
+    float* grad_b_x = (float*)grad_bias_x->storage->data;
+    float* grad_b_h = (float*)grad_bias_h->storage->data;
 
     float ** prim = (float**)primitives->storage->data;
     THNN_(Bprop)(prim, in_c, in_h, in_x, grad_out_c, grad_out_h,
@@ -494,4 +494,5 @@ void THNN_(LSTM_resetProfile)(THNNState *state)
     prof.sum = 0.0f;
 
 }
+
 #endif
