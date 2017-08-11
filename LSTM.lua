@@ -15,6 +15,7 @@ H(t) = O(t) .* tan{C(t)}
 function LSTM:__init(inputSize, hiddenSize, bias)
    parent.__init(self)
    outputSize = 4 * hiddenSize
+   self.hs = hiddenSize
    local bias = ((bias == nil) and true) or bias
    self.output_c = torch.Tensor()
    self.output_h = torch.Tensor()
@@ -34,8 +35,7 @@ function LSTM:__init(inputSize, hiddenSize, bias)
       self.grad_bias_x = torch.Tensor(outputSize)
    end
    self.dnnPrimitives = torch.Tensor(30)
-
-   self.mkldnnInitOk = 0
+   self.inMem = torch.Tensor()
    self:reset()
 end
 
@@ -78,10 +78,11 @@ function LSTM:updateOutput(input)
    batch_size = input[1]:size(1)
    self.output_c:resize(batch_size, self.weight_h:size(1))
    self.output_h:resize(batch_size, self.weight_h:size(1))
-
+   --allocate internal memory for LSTM.c using bs*(3*hs4+hs+hs) + hs4
+   self.inMem:resize(batch_size*self.hs*14+self.hs*4)
    input[1].THNN.LSTM_updateOutput(
       self.dnnPrimitives:cdata(),
-      self.mkldnnInitOk,
+      self.inMem:cdata(),
       input[1]:cdata(),
       input[2]:cdata(),
       input[3]:cdata(),
@@ -92,7 +93,6 @@ function LSTM:updateOutput(input)
       self.bias_h:cdata(),
       self.bias_x:cdata()
    )
-   self.mkldnnInitOk = 1
    return self.output
 end
 

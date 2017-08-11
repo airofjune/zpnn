@@ -6,7 +6,7 @@
 TH_API void THNN_(LSTM_updateOutput)(
           THNNState *state,
           THFloatTensor *primitives,
-          int initOK,
+          THTensor *pMem,
           THTensor *input_c,
           THTensor *input_h,
           THTensor *input_x,

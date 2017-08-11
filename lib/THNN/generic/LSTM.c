@@ -262,25 +262,26 @@ static void THNN_(TanhDot_bprop)(float* grad_out_c0, float* grad_out_h, float* t
     }
 }
 
-static int THNN_(InternalMemAlloc)(float** prim, const long bs, const long hs)
+
+static int THNN_(InternalMemAlloc)(float** prim, float* pMem, const long bs, const long hs)
 {
     const long hs4 = hs * 4;
-    prim[TEMP_GATE]    = (float*)malloc(sizeof(float)*bs*hs4);
-    prim[GATE_I]       = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GATE_F]       = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GATE_C]       = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GATE_O]       = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GRAD_GATE_I]  = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GRAD_GATE_F]  = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GRAD_GATE_C]  = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GRAD_GATE_O]  = (float*)malloc(sizeof(float)*bs*hs);
-    prim[TEMP_BIAS]    = (float*)malloc(sizeof(float)*hs4);
-    prim[C_TANH]       = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GRAD_OUTPUT_C]     = (float*)malloc(sizeof(float)*bs*hs);
-    prim[GRAD_TEMP_GATE]    = (float*)malloc(sizeof(float)*bs*hs4);
+    prim[TEMP_GATE]    = pMem;
+    prim[GATE_I]       = prim[TEMP_GATE] + bs * hs4;
+    prim[GATE_F]       = prim[GATE_I]    + bs * hs;
+    prim[GATE_C]       = prim[GATE_F]    + bs * hs;
+    prim[GATE_O]       = prim[GATE_C]    + bs * hs;
+    prim[GRAD_GATE_I]  = prim[GATE_O]    + bs * hs;
+    prim[GRAD_GATE_F]  = prim[GRAD_GATE_I] + bs*hs;
+    prim[GRAD_GATE_C]  = prim[GRAD_GATE_F] + bs*hs;
+    prim[GRAD_GATE_O]  = prim[GRAD_GATE_C] + bs*hs;
+    prim[TEMP_BIAS]    = prim[GRAD_GATE_O] + bs*hs;
+    prim[C_TANH]       = prim[TEMP_BIAS]   + hs4;
+    prim[GRAD_OUTPUT_C]= prim[C_TANH]      + bs*hs;
 
     return 0;
 }
+
 
 //prim, pointer to internal tensors
 static void THNN_(Fprop)(
@@ -289,14 +290,9 @@ static void THNN_(Fprop)(
       float *output_c, float *output_h,
       float *weight_h, float *weight_x,
       float *bias_h, float *bias_x,
-      const long bs, const long xl, const long hs,
-      int init_ok)
+      const long bs, const long xl, const long hs)
 {
     const long hs4 = hs * 4;            //4 * hidden length, weight size
-    if (!init_ok)
-    {
-        THNN_(InternalMemAlloc)(prim, 64, hs);
-    }
 
     THNN_(Linear_fprop)(bs, hs, xl, prim[TEMP_BIAS], bias_h, bias_x, prim[TEMP_GATE],
                 weight_h, weight_x, input_h, input_x);
@@ -348,7 +344,7 @@ static void THNN_(Bprop)(
 void THNN_(LSTM_updateOutput)(
       THNNState *state,
       THFloatTensor *primitives,
-      int init_ok,
+      THTensor *pMem,
       THTensor *input_c,
       THTensor *input_h,
       THTensor *input_x,
@@ -375,8 +371,9 @@ void THNN_(LSTM_updateOutput)(
     float* b_x = (float*)THTensor_(data)(bias_x);
     float* b_h = (float*)THTensor_(data)(bias_h);
     float ** prim = (float**)primitives->storage->data;
+    THNN_(InternalMemAlloc)(prim, (float*)THTensor_(data)(pMem), bs, hs);
     THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h,
-                w_h, w_x, b_h, b_x, bs, xl, hs, init_ok);
+                w_h, w_x, b_h, b_x, bs, xl, hs);
 }
 
 void THNN_(LSTM_updateGradInput)(
