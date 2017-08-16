@@ -55,14 +55,10 @@ static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
     //add bias for each batch
     //TODO, combine two bias together
     const long hs4 = hs*4;
-
-    cblas_scopy(hs4, bias_x, 1, temp_bias, 1);
-    cblas_saxpy(hs4, 1.0,  bias_h,  1, temp_bias, 1);
-
     #pragma omp parallel for
     for(int i=0; i<bs; ++i)
     {
-       cblas_scopy(hs4, temp_bias, 1, temp_gate+i*hs4, 1);
+       cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
     }
 
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, bs, hs4, xl, 1, input_x, xl,
@@ -102,7 +98,6 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
     {
         for(long j=0; j<bs; ++j)
             grad_bias_h[i] += grad_gate[j*hs4+i];
-        grad_bias_x[i] = grad_bias_h[i];
     }
 }
 
@@ -189,28 +184,13 @@ static void THNN_(CopySplit_bprop)(float* pIn, const long bs, const long hs,
     }
 }
 
-static void THNN_(DotMul)(float* z, const long len, const float* x, const float*y, int add)
-{
-    if(add)
-    {
-        #pragma omp parallel for
-        for(long i=0; i<len; ++i)
-            z[i] += x[i] * y[i];
-    }
-    else
-    {
-        #pragma omp parallel for
-        for(long i=0; i<len; ++i)
-            z[i] = x[i] * y[i];
-    }
-}
-
 static void THNN_(DotOutput_fprop)(float* output_c, const long len, float* gate_f,
                     float* gate_i, float* gate_c, float* input_c)
 {
     //output_c = gate_f .* input_c + gate_i .* gate_c
-    THNN_(DotMul)(output_c, len, gate_f, input_c, 0);
-    THNN_(DotMul)(output_c, len, gate_i, gate_c,  1);
+    #pragma omp parallel for
+    for(long i=0; i<len; ++i)
+        output_c[i] = gate_f[i] * input_c[i] + gate_i[i] * gate_c[i];
 }
 
 static void THNN_(DotOutput_bprop)(float* gate_f,float* gate_i, float* gate_c, float* input_c,
@@ -350,10 +330,8 @@ void THNN_(LSTM_updateOutput)(
       THTensor *input_x,
       THTensor *output_c,
       THTensor *output_h,
-      THTensor *weight_h,
-      THTensor *weight_x,
-      THTensor *bias_h,
-      THTensor *bias_x)
+      THTensor *weight,
+      THTensor *bias)
 {
 
     long bs = input_x->size[0];   //batch size
@@ -366,14 +344,13 @@ void THNN_(LSTM_updateOutput)(
     float* in_x = (float*)THTensor_(data)(input_x);
     float* out_c = (float*)THTensor_(data)(output_c);
     float* out_h = (float*)THTensor_(data)(output_h);
-    float* w_x = (float*)THTensor_(data)(weight_x);
-    float* w_h = (float*)THTensor_(data)(weight_h);
-    float* b_x = (float*)THTensor_(data)(bias_x);
-    float* b_h = (float*)THTensor_(data)(bias_h);
-    float ** prim = (float**)primitives->storage->data;
+    float* w_h = (float*)THTensor_(data)(weight);
+    float* w_x = w_h + hs * hs4;
+    float* b_h = (float*)THTensor_(data)(bias);
+    float* b_x = b_h + hs4;
+    float ** prim = (float**)primitives->storage->data + primitives->storageOffset;
     THNN_(InternalMemAlloc)(prim, (float*)THTensor_(data)(pMem), bs, hs);
-    THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h,
-                w_h, w_x, b_h, b_x, bs, xl, hs);
+    THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h, w_h, w_x, b_h, b_x, bs, xl, hs);
 }
 
 void THNN_(LSTM_updateGradInput)(
@@ -382,14 +359,11 @@ void THNN_(LSTM_updateGradInput)(
       THTensor *input_c,
       THTensor *input_h,
       THTensor *input_x,
-      THTensor *weight_h,
-      THTensor *weight_x,
+      THTensor *weight,
       THTensor *grad_output_c,
       THTensor *grad_output_h,
-      THTensor *grad_weight_h,
-      THTensor *grad_weight_x,
-      THTensor *grad_bias_h,
-      THTensor *grad_bias_x,
+      THTensor *grad_weight,
+      THTensor *grad_bias,
       THTensor *grad_input_c,
       THTensor *grad_input_h,
       THTensor *grad_input_x)
@@ -402,19 +376,19 @@ void THNN_(LSTM_updateGradInput)(
     float* in_c = (float*)THTensor_(data)(input_c);
     float* in_h = (float*)THTensor_(data)(input_h);
     float* in_x = (float*)THTensor_(data)(input_x);
-    float* w_x = (float*)THTensor_(data)(weight_x);
-    float* w_h = (float*)THTensor_(data)(weight_h);
+    float* w_h = (float*)THTensor_(data)(weight);
+    float* w_x = w_h + hs * hs4;
     float* grad_in_c = (float*)THTensor_(data)(grad_input_c);
     float* grad_in_h = (float*)THTensor_(data)(grad_input_h);
     float* grad_in_x = (float*)THTensor_(data)(grad_input_x);
     float* grad_out_c = (float*)THTensor_(data)(grad_output_c);
     float* grad_out_h = (float*)THTensor_(data)(grad_output_h);
-    float* grad_w_x = (float*)THTensor_(data)(grad_weight_x);
-    float* grad_w_h = (float*)THTensor_(data)(grad_weight_h);
-    float* grad_b_x = (float*)THTensor_(data)(grad_bias_x);
-    float* grad_b_h = (float*)THTensor_(data)(grad_bias_h);
+    float* grad_w_h = (float*)THTensor_(data)(grad_weight);
+    float* grad_w_x = grad_w_h + hs * hs4;
+    float* grad_b_h = (float*)THTensor_(data)(grad_bias);
+    float* grad_b_x = grad_b_h + hs4;
 
-    float ** prim = (float**)primitives->storage->data;
+    float ** prim = (float**)(primitives->storage->data + primitives->storageOffset);
     THNN_(Bprop)(prim, in_c, in_h, in_x, grad_out_c, grad_out_h,
         w_h, w_x, grad_w_h, grad_w_x, grad_b_h, grad_b_x,
         grad_in_c, grad_in_h, grad_in_x, bs, xl, hs);
