@@ -1,3 +1,4 @@
+#include "LSTM.h"
 #ifndef TH_GENERIC_FILE
 #define TH_GENERIC_FILE "generic/LSTM.c"
 #else
@@ -6,8 +7,6 @@
 #undef real
 #include "mkl.h"
 #define real temp
-#include "LSTM.h"
-
 
 static float THNN_(Sigmoid)(float a)
 {
@@ -46,19 +45,26 @@ static int THNN_(CompareVec)(float*a, float* b, const long len, const float gap)
     return 0;
 }
 
-static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
-            float * temp_bias, float* bias_h, float* bias_x,
-            float* temp_gate,  float* weight_h, float* weight_x,
-             float* input_h, float *input_x)
+static void THNN_(Linear_fprop)(
+    const long bs,
+    const long hs,
+    const long xl,
+    float* temp_bias,
+    float* bias_h,
+    float* bias_x,
+    float* temp_gate,
+    float* weight_h,
+    float* weight_x,
+    float* input_h,
+    float* input_x)
 {
     //gate = input_x * weight_x  + input_h * weight_h + bias_x + bias_h;
     //add bias for each batch
-    //TODO, combine two bias together
     const long hs4 = hs*4;
     #pragma omp parallel for
     for(int i=0; i<bs; ++i)
     {
-       cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
+        cblas_scopy(hs4, bias_h, 1, temp_gate+i*hs4, 1);
     }
 
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, bs, hs4, xl, 1, input_x, xl,
@@ -66,16 +72,27 @@ static void THNN_(Linear_fprop)(const long bs, const long hs, const long xl,
 
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, bs, hs4, hs, 1, input_h, hs,
                     weight_h, hs4, 1, temp_gate, hs4);
-
 }
 
-static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate,
-            float* weight_h, float* weight_x,  float* grad_weight_h, float* grad_weight_x,
-            float* grad_bias_h, float* grad_bias_x, float* grad_input_h,  float* grad_input_x,
-            const long bs, const long xl, const long hs)
+static void THNN_(Linear_bprop)(
+    float* input_h,
+    float* input_x,
+    float* grad_gate,
+    float* weight_h,
+    float* weight_x,
+    float* grad_weight_h,
+    float* grad_weight_x,
+    float* grad_bias_h,
+    float* grad_bias_x,
+    float* grad_input_h,
+    float* grad_input_x,
+    const long bs,
+    const long xl,
+    const long hs)
 {
     //gate = input_x * weight_x  + input_h * weight_h + bias;
     const long hs4 = hs*4;
+
     //grad_input_h (bs*hs) = grad_gate(bs*hs4) * T(weight_h) (hs4*hs)
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, bs, hs, hs4, 1, grad_gate, hs4,
                      weight_h, hs4, 0, grad_input_h, hs);
@@ -101,51 +118,43 @@ static void THNN_(Linear_bprop)(float* input_h, float* input_x, float* grad_gate
     }
 }
 
-static void THNN_(GateSigmoid_fprop)(float* gateValue, const long bs, const long hs)
-{
-    const long hs4 = hs * 4;
-    #pragma omp parallel for 
-    for(long i=0; i<bs; ++i)
-    {
-        for(long j=0; j<3*hs; ++j)
-        {
-            gateValue[i*hs4 + j] = THNN_(Sigmoid)(gateValue[i*hs4 + j]);
-        }
-    }
-
-    #pragma omp parallel for 
-    for(long i=0; i<bs; ++i)
-    {
-        for(long j=3*hs; j<hs4; ++j)
-        {
-            gateValue[i*hs4 + j] = tanh(gateValue[i*hs4 + j]);
-        }
-    }
-}
-
-static void THNN_(CopySplit_fprop)(float* pIn, const long bs, const long hs,
+static void THNN_(CopySplit_fprop)(
+    float* pIn, const long bs, const long hs,
     float* p1, float* p2, float* p3, float* p4)
 {
     #pragma omp parallel for
     for(long i=0; i<bs; ++i)
     {
-        float* pStart = pIn + i*hs*4;
         const long ihs = i * hs;
+        float* pStart = pIn + ihs*4;
         for(long j=0; j<hs; ++j)
+        {
+	        pStart[j] = THNN_(Sigmoid)(pStart[j]);
             p1[ihs+j] = pStart[j];
+        }
         pStart += hs;
         for(long j=0; j<hs; ++j)
+        {
+	        pStart[j] = THNN_(Sigmoid)(pStart[j]);
             p2[ihs+j] = pStart[j];
+        }
         pStart += hs;
         for(long j=0; j<hs; ++j)
+        {
+	        pStart[j] = THNN_(Sigmoid)(pStart[j]);
             p3[ihs+j] = pStart[j];
+        }
         pStart += hs;
         for(long j=0; j<hs; ++j)
+        {
+	        pStart[j] = tanh(pStart[j]);
             p4[ihs+j] = pStart[j];
+        }
     }
 }
 
-static void THNN_(CopySplit_bprop)(float* pIn, const long bs, const long hs,
+static void THNN_(CopySplit_bprop)(
+    float* pIn, const long bs, const long hs,
     float* p1, float* p2, float* p3, float* p4)
 {
     //sigmoid and split
@@ -184,64 +193,66 @@ static void THNN_(CopySplit_bprop)(float* pIn, const long bs, const long hs,
     }
 }
 
-static void THNN_(DotOutput_fprop)(float* output_c, const long len, float* gate_f,
-                    float* gate_i, float* gate_c, float* input_c)
+static void THNN_(TanhDot_fprop)(
+    float* output_c,
+    float* output_h,
+    float* tanC,
+    float* gate_f,
+    float* gate_i,
+    float* gate_c,
+    float* gate_o,
+    float* input_c,
+    const long len)
 {
     //output_c = gate_f .* input_c + gate_i .* gate_c
+    //c_tanh = tanh(output_c)
+    //output_h = gate_o .* c_tanh
     #pragma omp parallel for
     for(long i=0; i<len; ++i)
+    {
         output_c[i] = gate_f[i] * input_c[i] + gate_i[i] * gate_c[i];
+        tanC[i] = tanh(output_c[i]);
+        output_h[i] = tanC[i] * gate_o[i];
+    }
 }
 
-static void THNN_(DotOutput_bprop)(float* gate_f,float* gate_i, float* gate_c, float* input_c,
-                float* grad_output_c, float* grad_input_c, float* grad_gate_f,
-                float* grad_gate_i, float* grad_gate_c, const long len)
+static void THNN_(TanhDot_bprop)(
+    float* grad_out_c,
+    float* grad_out_h,
+    float* tanhC,
+    float* input_c,
+    float* gate_i,
+    float* gate_f,
+    float* gate_o,
+    float* gate_c,
+    float* grad_gate_i,
+    float* grad_gate_f,
+    float* grad_gate_o,
+    float* grad_gate_c,
+    float* grad_input_c,
+    const long len)
 {
     //output_c = gate_f .* input_c + gate_i .* gate_c
     //grad_input_c = grad_output_c .* gate_f
     //grad_gate_f  = grad_output_c .* input_c
     //grad_gate_i  = grad_output_c .* gate_c
     //grad_gate_c  = grad_output_c .* gate_i
-    #pragma omp parallel for
-    for(long i=0; i<len; ++i)
-    {
-        const float c = grad_output_c[i];
-        grad_input_c[i] = c * gate_f[i];
-        grad_gate_f[i]  = c * input_c[i];
-        grad_gate_i[i]  = c * gate_c[i];
-        grad_gate_c[i]  = c * gate_i[i];
-    }
-}
-
-static void THNN_(TanhDot_fprop)(float* out, float* tanC, const float* in, const float* dotIn, const long len)
-{
-    //c_tanh = tanh(output_c)
-    //output_h = gate_o .* c_tanh
-    #pragma omp parallel for
-    for(long i=0; i<len; ++i)
-    {
-        tanC[i] = tanh(in[i]);
-        out[i] = tanC[i] * dotIn[i];
-    }
-}
-
-static void THNN_(TanhDot_bprop)(float* grad_out_c0, float* grad_out_h, float* tanhC,
-    float* gate_o, float* grad_out_c1, float* grad_gate_o, const long len)
-{
     //c_tanh = tanh(output_c)
     //output_h = gate_o .* c_tanh
     //grad_output_c  = grad_output_c + (1-c_tanh.*c_tanh).*gate_o.*grad_output_h
     //grad_gate_o    = grad_output_h .* c_thanh
-    cblas_scopy(len, grad_out_c0, 1, grad_out_c1, 1);
     #pragma omp parallel for
     for(long i=0; i<len; ++i)
     {
         const float c = tanhC[i];
         grad_gate_o[i] = grad_out_h[i] * c;
-        grad_out_c1[i] += (1 - c*c) * gate_o[i] * grad_out_h[i];
+        const float d = grad_out_c[i] + (1 - c*c) * gate_o[i] * grad_out_h[i];
+        grad_input_c[i] = d * gate_f[i];
+        grad_gate_f[i]  = d * input_c[i];
+        grad_gate_i[i]  = d * gate_c[i];
+        grad_gate_c[i]  = d * gate_i[i];
     }
 }
-
 
 static int THNN_(InternalMemAlloc)(float** prim, float* pMem, const long bs, const long hs)
 {
@@ -265,15 +276,22 @@ static int THNN_(InternalMemAlloc)(float** prim, float* pMem, const long bs, con
 
 //prim, pointer to internal tensors
 static void THNN_(Fprop)(
-      float **prim,
-      float *input_c,  float *input_h, float *input_x,
-      float *output_c, float *output_h,
-      float *weight_h, float *weight_x,
-      float *bias_h, float *bias_x,
-      const long bs, const long xl, const long hs)
+    float **prim,
+    float *input_c,
+    float *input_h,
+    float *input_x,
+    float *output_c,
+    float *output_h,
+    float *weight_h,
+    float *weight_x,
+    float *bias_h,
+    float *bias_x,
+    const long bs,
+    const long xl,
+    const long hs)
 {
-    const long hs4 = hs * 4;            //4 * hidden length, weight size
-
+    //4 * hidden length, weight size
+    const long hs4 = hs * 4;
     THNN_(Linear_fprop)(bs, hs, xl, prim[TEMP_BIAS], bias_h, bias_x, prim[TEMP_GATE],
                 weight_h, weight_x, input_h, input_x);
 
@@ -282,34 +300,38 @@ static void THNN_(Fprop)(
     //gate_f = sig(gate[:,1])
     //gate_o = sig(gate[:,2])
     //gate_c = tanh(gate[:,3])
-    THNN_(GateSigmoid_fprop)(prim[TEMP_GATE], bs, hs);
-
     THNN_(CopySplit_fprop)(prim[TEMP_GATE], bs, hs, prim[GATE_I], prim[GATE_F], prim[GATE_O], prim[GATE_C]);
 
-    THNN_(DotOutput_fprop)(output_c, bs*hs, prim[GATE_F],
-                    prim[GATE_I], prim[GATE_C], input_c);
-
-    THNN_(TanhDot_fprop)(output_h, prim[C_TANH], output_c, prim[GATE_O], bs*hs);
-
+    THNN_(TanhDot_fprop)(output_c, output_h, prim[C_TANH],
+           prim[GATE_F], prim[GATE_I], prim[GATE_C], prim[GATE_O],
+           input_c, bs*hs);
 }
 
 static void THNN_(Bprop)(
-      float **prim,
-      float *input_c, float *input_h, float *input_x,
-      float *grad_out_c, float *grad_out_h,
-      float *weight_h, float *weight_x,
-      float *grad_weight_h, float *grad_weight_x,
-      float *grad_bias_h, float *grad_bias_x,
-      float *grad_input_c, float *grad_input_h, float* grad_input_x,
-      const long bs, const long xl, const long hs)
+    float **prim,
+    float *input_c,
+    float *input_h,
+    float *input_x,
+    float *grad_out_c,
+    float *grad_out_h,
+    float *weight_h,
+    float *weight_x,
+    float *grad_weight_h,
+    float *grad_weight_x,
+    float *grad_bias_h,
+    float *grad_bias_x,
+    float *grad_input_c,
+    float *grad_input_h,
+    float* grad_input_x,
+    const long bs,
+    const long xl,
+    const long hs)
 {
     const long hs4 = hs * 4;
-    THNN_(TanhDot_bprop)(grad_out_c, grad_out_h, prim[C_TANH], prim[GATE_O],
-                prim[GRAD_OUTPUT_C], prim[GRAD_GATE_O], bs*hs);
-
-    THNN_(DotOutput_bprop)(prim[GATE_F], prim[GATE_I], prim[GATE_C], input_c,
-                prim[GRAD_OUTPUT_C], grad_input_c, prim[GRAD_GATE_F],
-                prim[GRAD_GATE_I], prim[GRAD_GATE_C], bs*hs);
+    THNN_(TanhDot_bprop)(grad_out_c, grad_out_h, prim[C_TANH], input_c,
+            prim[GATE_I], prim[GATE_F], prim[GATE_O], prim[GATE_C],
+            prim[GRAD_GATE_I], prim[GRAD_GATE_F], prim[GRAD_GATE_O], prim[GRAD_GATE_C],
+            grad_input_c, bs*hs);
 
     THNN_(CopySplit_bprop)(prim[TEMP_GATE], bs, hs, prim[GRAD_GATE_I],
                 prim[GRAD_GATE_F], prim[GRAD_GATE_O], prim[GRAD_GATE_C]);
@@ -317,21 +339,20 @@ static void THNN_(Bprop)(
     THNN_(Linear_bprop)(input_h, input_x, prim[TEMP_GATE], weight_h, weight_x,
                 grad_weight_h, grad_weight_x, grad_bias_h, grad_bias_x,
                 grad_input_h, grad_input_x, bs, xl, hs);
-
 }
 
 //prim, pointer to internal tensors
 void THNN_(LSTM_updateOutput)(
-      THNNState *state,
-      THFloatTensor *primitives,
-      THTensor *pMem,
-      THTensor *input_c,
-      THTensor *input_h,
-      THTensor *input_x,
-      THTensor *output_c,
-      THTensor *output_h,
-      THTensor *weight,
-      THTensor *bias)
+    THNNState *state,
+    THFloatTensor *primitives,
+    THTensor *pMem,
+    THTensor *input_c,
+    THTensor *input_h,
+    THTensor *input_x,
+    THTensor *output_c,
+    THTensor *output_h,
+    THTensor *weight,
+    THTensor *bias)
 {
 
     long bs = input_x->size[0];   //batch size
@@ -349,24 +370,27 @@ void THNN_(LSTM_updateOutput)(
     float* b_h = (float*)THTensor_(data)(bias);
     float* b_x = b_h + hs4;
     float ** prim = (float**)primitives->storage->data + primitives->storageOffset;
+
     THNN_(InternalMemAlloc)(prim, (float*)THTensor_(data)(pMem), bs, hs);
-    THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h, w_h, w_x, b_h, b_x, bs, xl, hs);
+
+    THNN_(Fprop)(prim, in_c, in_h, in_x, out_c, out_h,
+                 w_h, w_x, b_h, b_x, bs, xl, hs);
 }
 
 void THNN_(LSTM_updateGradInput)(
-      THNNState *state,
-      THFloatTensor *primitives,
-      THTensor *input_c,
-      THTensor *input_h,
-      THTensor *input_x,
-      THTensor *weight,
-      THTensor *grad_output_c,
-      THTensor *grad_output_h,
-      THTensor *grad_weight,
-      THTensor *grad_bias,
-      THTensor *grad_input_c,
-      THTensor *grad_input_h,
-      THTensor *grad_input_x)
+    THNNState *state,
+    THFloatTensor *primitives,
+    THTensor *input_c,
+    THTensor *input_h,
+    THTensor *input_x,
+    THTensor *weight,
+    THTensor *grad_output_c,
+    THTensor *grad_output_h,
+    THTensor *grad_weight,
+    THTensor *grad_bias,
+    THTensor *grad_input_c,
+    THTensor *grad_input_h,
+    THTensor *grad_input_x)
 {
     long bs = input_x->size[0];   //batch size
     long xl = input_x->size[1];   //input feature length
